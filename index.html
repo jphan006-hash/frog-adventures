@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Frog Adventure PRO+</title>
+<title>Frogger PRO+ MAX</title>
 <style>
 body {
     margin: 0;
-    overflow: hidden;
     background: #111;
+    overflow: hidden;
     color: white;
     font-family: Arial;
 }
@@ -22,218 +22,242 @@ canvas {
     top: 10px;
     left: 10px;
 }
-#colorPicker {
-    position: absolute;
-    top: 40px;
-    left: 10px;
-}
 </style>
 </head>
 <body>
 
-<div id="ui">Level: 1</div>
-<input type="color" id="colorPicker" value="#00ff00">
+<div id="ui"></div>
 <canvas id="game" width="800" height="500"></canvas>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const ui = document.getElementById("ui");
-const colorPicker = document.getElementById("colorPicker");
+
+const grid = 40;
 
 let level = 1;
-const maxLevel = 80;
+let lives = 3;
+let gameOver = false;
 
 // Frog
 const frog = {
-    x: 50,
-    y: 400,
-    size: 20,
-    velY: 0,
-    jumping: false,
-    speed: 3,
-    shield: false,
-    color: colorPicker.value
+    x: 380,
+    y: 460,
+    size: 30
 };
 
-const gravity = 0.5;
+// Goals
+let goals = [
+    {x: 80, reached: false},
+    {x: 280, reached: false},
+    {x: 480, reached: false},
+    {x: 680, reached: false}
+];
 
-const goal = { x: 750, y: 420, size: 30 };
+// Cars + Logs
+let cars = [];
+let logs = [];
 
-let enemies = [];
-let powerUps = [];
-
-// Color picker update
-colorPicker.addEventListener("input", () => {
-    frog.color = colorPicker.value;
-});
-
-// Sound
-function beep(freq) {
-    let ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
-    let osc = ctxAudio.createOscillator();
-    osc.type = "square";
-    osc.frequency.value = freq;
-    osc.connect(ctxAudio.destination);
-    osc.start();
-    setTimeout(() => osc.stop(), 100);
+function resetFrog() {
+    frog.x = 380;
+    frog.y = 460;
 }
 
-// Level generator
-function generateLevel() {
-    enemies = [];
-    powerUps = [];
+function createLevel() {
+    cars = [];
+    logs = [];
 
-    let enemyCount = Math.min(3 + level, 25);
-
-    for (let i = 0; i < enemyCount; i++) {
-        enemies.push({
-            x: Math.random() * 700 + 50,
-            y: Math.random() * 450,
-            size: 20,
-            speed: 1 + level * 0.05
-        });
+    // Cars (bottom half)
+    for (let i = 1; i <= 5; i++) {
+        for (let j = 0; j < 3 + level; j++) {
+            cars.push({
+                x: Math.random() * 800,
+                y: 500 - i * grid,
+                width: 50,
+                height: 30,
+                speed: (i % 2 ? 1 : -1) * (2 + level * 0.3)
+            });
+        }
     }
 
-    if (level % 3 === 0) {
-        powerUps.push({
-            x: Math.random() * 700,
-            y: Math.random() * 400,
-            type: Math.random() < 0.5 ? "speed" : "shield",
-            size: 15
-        });
+    // Logs (top water)
+    for (let i = 1; i <= 3; i++) {
+        for (let j = 0; j < 2 + level; j++) {
+            logs.push({
+                x: Math.random() * 800,
+                y: i * grid,
+                width: 100,
+                height: 30,
+                speed: (i % 2 ? -1 : 1) * (1.5 + level * 0.2)
+            });
+        }
     }
-
-    frog.x = 50;
-    frog.y = 400;
-    frog.velY = 0;
-    frog.shield = false;
 }
 
-generateLevel();
+createLevel();
 
 // Controls
-let keys = {};
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
-
-// Touch jump
-canvas.addEventListener("touchstart", () => {
-    if (!frog.jumping) {
-        frog.velY = -10;
-        frog.jumping = true;
-        beep(400);
+document.addEventListener("keydown", e => {
+    if (gameOver && e.key === "Enter") {
+        level = 1;
+        lives = 3;
+        gameOver = false;
+        goals.forEach(g => g.reached = false);
+        createLevel();
+        resetFrog();
+        return;
     }
+
+    if (gameOver) return;
+
+    if (e.key === "ArrowUp") frog.y -= grid;
+    if (e.key === "ArrowDown") frog.y += grid;
+    if (e.key === "ArrowLeft") frog.x -= grid;
+    if (e.key === "ArrowRight") frog.x += grid;
 });
 
 // Collision
-function collide(a, b) {
+function hit(a, b) {
     return (
-        a.x < b.x + b.size &&
+        a.x < b.x + b.width &&
         a.x + a.size > b.x &&
-        a.y < b.y + b.size &&
+        a.y < b.y + b.height &&
         a.y + a.size > b.y
     );
 }
 
+// Lose life
+function loseLife() {
+    lives--;
+    resetFrog();
+
+    if (lives <= 0) {
+        gameOver = true;
+    }
+}
+
 // Update
 function update() {
-    if (keys["ArrowLeft"]) frog.x -= frog.speed;
-    if (keys["ArrowRight"]) frog.x += frog.speed;
+    if (gameOver) return;
 
-    if (keys[" "] && !frog.jumping) {
-        frog.velY = -10;
-        frog.jumping = true;
-        beep(500);
-    }
+    // Move cars
+    cars.forEach(car => {
+        car.x += car.speed;
+        if (car.x > 800) car.x = -60;
+        if (car.x < -60) car.x = 800;
 
-    frog.velY += gravity;
-    frog.y += frog.velY;
+        if (hit(frog, car)) loseLife();
+    });
 
-    if (frog.y >= 400) {
-        frog.y = 400;
-        frog.jumping = false;
-    }
+    // Move logs
+    let onLog = false;
 
-    enemies.forEach(e => {
-        let dx = frog.x - e.x;
-        let dy = frog.y - e.y;
-        let dist = Math.sqrt(dx*dx + dy*dy);
+    logs.forEach(log => {
+        log.x += log.speed;
 
-        e.x += (dx / dist) * e.speed;
-        e.y += (dy / dist) * e.speed;
+        if (log.x > 800) log.x = -120;
+        if (log.x < -120) log.x = 800;
 
-        if (collide(frog, e)) {
-            if (frog.shield) {
-                frog.shield = false;
-            } else {
-                level = 1;
-                generateLevel();
-                beep(100);
-            }
+        if (hit(frog, log)) {
+            onLog = true;
+            frog.x += log.speed;
         }
     });
 
-    powerUps.forEach((p, i) => {
-        if (collide(frog, p)) {
-            if (p.type === "speed") frog.speed += 1;
-            if (p.type === "shield") frog.shield = true;
-            powerUps.splice(i, 1);
-            beep(800);
+    // Water check
+    if (frog.y < 200 && frog.y > 0 && !onLog) {
+        loseLife();
+    }
+
+    // Clamp frog
+    frog.x = Math.max(0, Math.min(770, frog.x));
+    frog.y = Math.max(0, Math.min(460, frog.y));
+
+    // Goals
+    goals.forEach(goal => {
+        if (!goal.reached &&
+            frog.x < goal.x + 40 &&
+            frog.x + frog.size > goal.x &&
+            frog.y < 40
+        ) {
+            goal.reached = true;
+            resetFrog();
         }
     });
 
-    if (collide(frog, goal)) {
+    // Level complete
+    if (goals.every(g => g.reached)) {
         level++;
-        if (level > maxLevel) {
-            alert("🏆 You beat all 80 levels!");
-            level = 1;
-        }
-        generateLevel();
-        beep(900);
+        goals.forEach(g => g.reached = false);
+        createLevel();
+        resetFrog();
     }
 
-    frog.x = Math.max(0, Math.min(canvas.width - frog.size, frog.x));
+    ui.innerText = `Level: ${level} | Lives: ${lives}`;
 }
 
 // Draw
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Frog (custom color)
-    ctx.fillStyle = frog.shield ? "cyan" : frog.color;
-    ctx.fillRect(frog.x, frog.y, frog.size, frog.size);
+    // Water
+    ctx.fillStyle = "blue";
+    ctx.fillRect(0, 0, 800, 200);
 
-    // Eyes
-    ctx.fillStyle = "black";
-    ctx.fillRect(frog.x+4, frog.y+4, 4, 4);
-    ctx.fillRect(frog.x+12, frog.y+4, 4, 4);
+    // Safe zones
+    ctx.fillStyle = "darkgreen";
+    ctx.fillRect(0, 200, 800, 40);
+    ctx.fillRect(0, 460, 800, 40);
 
-    // Enemies
-    ctx.fillStyle = "red";
-    enemies.forEach(e => ctx.fillRect(e.x, e.y, e.size, e.size));
+    // Road
+    ctx.fillStyle = "#333";
+    ctx.fillRect(0, 240, 800, 220);
 
-    // Goal
-    ctx.fillStyle = "gold";
-    ctx.fillRect(goal.x, goal.y, goal.size, goal.size);
-
-    // Power-ups
-    powerUps.forEach(p => {
-        ctx.fillStyle = p.type === "speed" ? "blue" : "purple";
-        ctx.fillRect(p.x, p.y, p.size, p.size);
+    // Goals
+    goals.forEach(goal => {
+        ctx.fillStyle = goal.reached ? "lime" : "black";
+        ctx.fillRect(goal.x, 0, 40, 40);
     });
 
-    ui.innerText = "Level: " + level + " / " + maxLevel;
+    // Logs
+    ctx.fillStyle = "#8B4513";
+    logs.forEach(log => {
+        ctx.fillRect(log.x, log.y, log.width, log.height);
+    });
+
+    // Cars
+    ctx.fillStyle = "red";
+    cars.forEach(car => {
+        ctx.fillRect(car.x, car.y, car.width, car.height);
+    });
+
+    // Frog
+    ctx.fillStyle = "lime";
+    ctx.fillRect(frog.x, frog.y, frog.size, frog.size);
+
+    ctx.fillStyle = "black";
+    ctx.fillRect(frog.x+5, frog.y+5, 5, 5);
+    ctx.fillRect(frog.x+20, frog.y+5, 5, 5);
+
+    // Game Over
+    if (gameOver) {
+        ctx.fillStyle = "white";
+        ctx.font = "40px Arial";
+        ctx.fillText("GAME OVER", 270, 220);
+        ctx.font = "20px Arial";
+        ctx.fillText("Press ENTER to restart", 260, 260);
+    }
 }
 
 // Loop
-function gameLoop() {
+function loop() {
     update();
     draw();
-    requestAnimationFrame(gameLoop);
+    requestAnimationFrame(loop);
 }
 
-gameLoop();
+loop();
 </script>
 
 </body>
