@@ -1,264 +1,34 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>Frogger PRO+ MAX</title>
+<title>Detective Murder Game</title>
 <style>
 body {
-    margin: 0;
-    background: #111;
-    overflow: hidden;
-    color: white;
-    font-family: Arial;
+    margin:0;
+    background:black;
+    color:white;
+    font-family:sans-serif;
 }
 canvas {
-    display: block;
-    margin: auto;
-    background: #222;
-    border: 3px solid lime;
+    display:block;
+    margin:auto;
+    background:#111;
 }
 #ui {
-    position: absolute;
-    top: 10px;
-    left: 10px;
+    position:absolute;
+    top:10px;
+    left:10px;
+}
+button {
+    margin:5px;
 }
 </style>
 </head>
 <body>
 
 <div id="ui"></div>
-<canvas id="game" width="800" height="500"></canvas>
+<canvas id="game" width="600" height="600"></canvas>
 
-<script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-const ui = document.getElementById("ui");
-
-const grid = 40;
-
-let level = 1;
-let lives = 3;
-let gameOver = false;
-
-// Frog
-const frog = {
-    x: 380,
-    y: 460,
-    size: 30
-};
-
-// Goals
-let goals = [
-    {x: 80, reached: false},
-    {x: 280, reached: false},
-    {x: 480, reached: false},
-    {x: 680, reached: false}
-];
-
-// Cars + Logs
-let cars = [];
-let logs = [];
-
-function resetFrog() {
-    frog.x = 380;
-    frog.y = 460;
-}
-
-function createLevel() {
-    cars = [];
-    logs = [];
-
-    // Cars (bottom half)
-    for (let i = 1; i <= 5; i++) {
-        for (let j = 0; j < 3 + level; j++) {
-            cars.push({
-                x: Math.random() * 800,
-                y: 500 - i * grid,
-                width: 50,
-                height: 30,
-                speed: (i % 2 ? 1 : -1) * (2 + level * 0.3)
-            });
-        }
-    }
-
-    // Logs (top water)
-    for (let i = 1; i <= 3; i++) {
-        for (let j = 0; j < 2 + level; j++) {
-            logs.push({
-                x: Math.random() * 800,
-                y: i * grid,
-                width: 100,
-                height: 30,
-                speed: (i % 2 ? -1 : 1) * (1.5 + level * 0.2)
-            });
-        }
-    }
-}
-
-createLevel();
-
-// Controls
-document.addEventListener("keydown", e => {
-    if (gameOver && e.key === "Enter") {
-        level = 1;
-        lives = 3;
-        gameOver = false;
-        goals.forEach(g => g.reached = false);
-        createLevel();
-        resetFrog();
-        return;
-    }
-
-    if (gameOver) return;
-
-    if (e.key === "ArrowUp") frog.y -= grid;
-    if (e.key === "ArrowDown") frog.y += grid;
-    if (e.key === "ArrowLeft") frog.x -= grid;
-    if (e.key === "ArrowRight") frog.x += grid;
-});
-
-// Collision
-function hit(a, b) {
-    return (
-        a.x < b.x + b.width &&
-        a.x + a.size > b.x &&
-        a.y < b.y + b.height &&
-        a.y + a.size > b.y
-    );
-}
-
-// Lose life
-function loseLife() {
-    lives--;
-    resetFrog();
-
-    if (lives <= 0) {
-        gameOver = true;
-    }
-}
-
-// Update
-function update() {
-    if (gameOver) return;
-
-    // Move cars
-    cars.forEach(car => {
-        car.x += car.speed;
-        if (car.x > 800) car.x = -60;
-        if (car.x < -60) car.x = 800;
-
-        if (hit(frog, car)) loseLife();
-    });
-
-    // Move logs
-    let onLog = false;
-
-    logs.forEach(log => {
-        log.x += log.speed;
-
-        if (log.x > 800) log.x = -120;
-        if (log.x < -120) log.x = 800;
-
-        if (hit(frog, log)) {
-            onLog = true;
-            frog.x += log.speed;
-        }
-    });
-
-    // Water check
-    if (frog.y < 200 && frog.y > 0 && !onLog) {
-        loseLife();
-    }
-
-    // Clamp frog
-    frog.x = Math.max(0, Math.min(770, frog.x));
-    frog.y = Math.max(0, Math.min(460, frog.y));
-
-    // Goals
-    goals.forEach(goal => {
-        if (!goal.reached &&
-            frog.x < goal.x + 40 &&
-            frog.x + frog.size > goal.x &&
-            frog.y < 40
-        ) {
-            goal.reached = true;
-            resetFrog();
-        }
-    });
-
-    // Level complete
-    if (goals.every(g => g.reached)) {
-        level++;
-        goals.forEach(g => g.reached = false);
-        createLevel();
-        resetFrog();
-    }
-
-    ui.innerText = `Level: ${level} | Lives: ${lives}`;
-}
-
-// Draw
-function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Water
-    ctx.fillStyle = "blue";
-    ctx.fillRect(0, 0, 800, 200);
-
-    // Safe zones
-    ctx.fillStyle = "darkgreen";
-    ctx.fillRect(0, 200, 800, 40);
-    ctx.fillRect(0, 460, 800, 40);
-
-    // Road
-    ctx.fillStyle = "#333";
-    ctx.fillRect(0, 240, 800, 220);
-
-    // Goals
-    goals.forEach(goal => {
-        ctx.fillStyle = goal.reached ? "lime" : "black";
-        ctx.fillRect(goal.x, 0, 40, 40);
-    });
-
-    // Logs
-    ctx.fillStyle = "#8B4513";
-    logs.forEach(log => {
-        ctx.fillRect(log.x, log.y, log.width, log.height);
-    });
-
-    // Cars
-    ctx.fillStyle = "red";
-    cars.forEach(car => {
-        ctx.fillRect(car.x, car.y, car.width, car.height);
-    });
-
-    // Frog
-    ctx.fillStyle = "lime";
-    ctx.fillRect(frog.x, frog.y, frog.size, frog.size);
-
-    ctx.fillStyle = "black";
-    ctx.fillRect(frog.x+5, frog.y+5, 5, 5);
-    ctx.fillRect(frog.x+20, frog.y+5, 5, 5);
-
-    // Game Over
-    if (gameOver) {
-        ctx.fillStyle = "white";
-        ctx.font = "40px Arial";
-        ctx.fillText("GAME OVER", 270, 220);
-        ctx.font = "20px Arial";
-        ctx.fillText("Press ENTER to restart", 260, 260);
-    }
-}
-
-// Loop
-function loop() {
-    update();
-    draw();
-    requestAnimationFrame(loop);
-}
-
-loop();
-</script>
-
+<script src="game.js"></script>
 </body>
 </html>
